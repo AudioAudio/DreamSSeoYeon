@@ -1,0 +1,11 @@
+# 빌드 결과물 (tools/build-single-file.mjs 로 다시 만들 수 있음)
+dist/
+
+# Cloudflare / Node
+node_modules/
+.wrangler/
+.dev.vars
+
+# OS
+.DS_Store
+Thumbs.db

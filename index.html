@@ -387,14 +387,13 @@ button:focus-visible{outline:3px solid #fff;outline-offset:3px;border-radius:99p
   try { best = +localStorage.getItem('stackBest') || 0; } catch (e) {}
   setDigits($('best'), best, '최고 기록');
 
+  // Render resolution is fixed at 720x1280 (9:16) regardless of device or screen density,
+  // like Lulucy's Flight. Game coordinates stay 360x640 (drawn at 2x); CSS scales the canvas to fit.
+  const RENDER_W = 720, RENDER_H = 1280;
   function resize() {
-    dpr = Math.min(window.devicePixelRatio || 1, 2);
-    const r = cv.getBoundingClientRect();
-    cv.width = Math.round(r.width * dpr); cv.height = Math.round(r.height * dpr);
-    scale = r.width / VW;
+    dpr = 1; scale = RENDER_W / VW;
+    if (cv.width !== RENDER_W || cv.height !== RENDER_H) { cv.width = RENDER_W; cv.height = RENDER_H; }
   }
-  window.addEventListener('resize', resize);
-  if (window.ResizeObserver) new ResizeObserver(resize).observe(cv);
 
   const colorIdx = i => ((colorBase + i) % 8) + 1;
   const blockTop = i => GROUND - (i + 1) * BH;

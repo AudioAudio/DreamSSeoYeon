@@ -1,0 +1,8 @@
+name = "kkranking"
+main = "worker.js"
+compatibility_date = "2024-09-23"
+
+# 1) npx wrangler kv namespace create RANK   → 출력된 id를 아래에 붙여 넣기
+[[kv_namespaces]]
+binding = "RANK"
+id = "여기에_KV_ID_붙여넣기"

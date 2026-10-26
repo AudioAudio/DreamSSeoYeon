@@ -486,6 +486,10 @@ button:focus-visible{outline:3px solid #fff;outline-offset:3px;border-radius:99p
   }
 
   function update() {
+    // background stage cross-fade (counted in game ticks so it lasts 0.8s everywhere)
+    const st = stageOf(score);
+    if (st !== bgTo) { bgFrom = bgTo; bgTo = st; bgT = 0; }
+    if (bgT < BG_FADE) bgT++;
     if (cur) {
       cur.x += cur.dir * cur.speed;
       if (cur.x > VW - cur.w * 0.15 && cur.dir > 0) cur.dir = -1;
@@ -615,9 +619,6 @@ button:focus-visible{outline:3px solid #fff;outline-offset:3px;border-radius:99p
     ctx.imageSmoothingQuality = 'high';
     ctx.fillStyle = '#2a2f6e'; ctx.fillRect(0, 0, VW, VH);
     // cloud village 0–29F → rainbow cloud kingdom 30–69F → star castle 70F+
-    const st = stageOf(score);
-    if (st !== bgTo) { bgFrom = bgTo; bgTo = st; bgT = 0; }
-    if (bgT < BG_FADE) bgT++;
     drawScene(IMG[BG_KEYS[bgFrom]], 1);
     drawScene(IMG[BG_KEYS[bgTo]], smooth(0, BG_FADE, bgT));
 
@@ -658,7 +659,20 @@ button:focus-visible{outline:3px solid #fff;outline-offset:3px;border-radius:99p
     drawFx();
   }
 
-  function loop() { update(); render(); requestAnimationFrame(loop); }
+  // Fixed timestep: the game always advances 60 ticks per second whatever the screen refresh
+  // rate (60/90/120/144Hz) or frame drops, so aim speed, hop rhythm and timing windows are identical
+  // on every device. Rendering still happens once per display frame.
+  const TICK = 1000 / 60, MAX_CATCHUP = 5;   // after a long stall (tab switch) skip ahead instead of fast-forwarding
+  let lastT = null, acc = 0;
+  function loop(now) {
+    if (lastT === null) lastT = now;
+    acc += Math.min(now - lastT, TICK * MAX_CATCHUP);
+    lastT = now;
+    while (acc >= TICK) { update(); acc -= TICK; }
+    render();
+    requestAnimationFrame(loop);
+  }
+  document.addEventListener('visibilitychange', () => { lastT = null; acc = 0; });
 
   function start() {
     $('startOv').hidden = true; $('overOv').hidden = true;
@@ -680,7 +694,7 @@ button:focus-visible{outline:3px solid #fff;outline-offset:3px;border-radius:99p
   $('retryBtn').addEventListener('click', start);
 
   resize(); reset(); state = 'idle';
-  loop();
+  requestAnimationFrame(loop);
 })();
 </script>
 </body>

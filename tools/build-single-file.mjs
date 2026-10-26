@@ -1,11 +1,12 @@
-// index.html + assets/ → dist/kkumkkugo-isseoyeon.html (이미지를 모두 넣은 파일 하나)
+// index.html + assets/ → dist/kkumkkugo-isseoyeon.html (이미지·소리를 모두 넣은 파일 하나)
 // 사용: node tools/build-single-file.mjs
 import { readFileSync, writeFileSync, readdirSync, statSync, mkdirSync } from 'node:fs';
 import { join, relative, extname } from 'node:path';
 
 const root = new URL('..', import.meta.url).pathname;
 const assets = join(root, 'assets');
-const mime = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp' };
+const mime = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp',
+  '.mp3': 'audio/mpeg', '.wav': 'audio/wav', '.ogg': 'audio/ogg' };
 const data = {};
 (function walk(dir) {
   for (const f of readdirSync(dir)) {
@@ -20,4 +21,4 @@ const html = readFileSync(join(root, 'index.html'), 'utf8')
 mkdirSync(join(root, 'dist'), { recursive: true });
 const out = join(root, 'dist', 'kkumkkugo-isseoyeon.html');
 writeFileSync(out, html);
-console.log(`${Object.keys(data).length}개 이미지 포함 → ${out} (${Math.round(html.length / 1024)} KB)`);
+console.log(`${Object.keys(data).length}개 리소스 포함 → ${out} (${Math.round(html.length / 1024)} KB)`);

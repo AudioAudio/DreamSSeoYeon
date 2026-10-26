@@ -6,7 +6,7 @@
 `index.html`을 로컬 웹 서버로 여세요. (브라우저가 파일을 직접 열면 이미지를 불러오지 못할 수 있어요)
 예: 이 폴더에서 `python3 -m http.server` 실행 후 `http://localhost:8000` 접속.
 
-파일 하나로 나눠 주고 싶을 때는 `node tools/build-single-file.mjs` → `dist/kkumkkugo-isseoyeon.html` (이미지를 모두 넣은 단일 HTML, 더블클릭으로 바로 열림).
+파일 하나로 나눠 주고 싶을 때는 `node tools/build-single-file.mjs` → `dist/kkumkkugo-isseoyeon.html` (이미지·소리를 모두 넣은 단일 HTML, 더블클릭으로 바로 열림. 소리가 들어가 약 14MB).
 
 ## 해상도
 - 렌더 해상도 **720×1280 고정** (9:16). 기기 화면 밀도와 상관없이 항상 이 해상도로 그린 뒤 화면 크기에 맞춰 표시해요.
@@ -41,6 +41,26 @@
 | 블럭이 들어갈 수 있는 순간 | 해냥이가 블럭 높이의 85% 이상 떠 있을 때 |
 | 배경 단계 | 0~29층 달밤 구름마을 / 30~69층 구름왕국 / 70층~ 별빛 정원 (전환 0.8초) |
 
+## 사운드
+| 화면 / 이벤트 | 파일 (`assets/audio/`) |
+|---|---|
+| 0~29층 배경음악 | bgm/bgm_01_original_lullaby.mp3 (원곡 그대로) |
+| 30~69층 배경음악 | bgm/bgm_02_cloud_path.wav |
+| 70층~ 배경음악 (계속 반복) | bgm/bgm_03_dream_castle.wav |
+| 해냥이 이륙 / 착지 | sfx_jump / sfx_land |
+| 블럭 성공(일반) / 잘림 | sfx_stack / sfx_cut (잘린 조각이 있을 때 함께) |
+| PERFECT / 2연속 이상 | sfx_perfect (일반 성공음 대신) / sfx_combo (0.16초 뒤) |
+| 배경 단계 전환(30·70층) | sfx_dream_transition |
+| 게임오버 / 신기록 | sfx_gameover / sfx_newrecord (1.3초 뒤) |
+| 모든 버튼 | sfx_click |
+
+- 배경음악은 배경 단계와 같이 바뀌고, 곡 사이는 2초 크로스페이드. 게임오버 때 0.4로 줄었다가 다시 하기에서 원곡으로 돌아가요.
+- 원곡이 새 두 곡보다 약 12dB 커서(-12.7 / -24.7 / -23.6 LUFS) 곡마다 같은 크기로 맞춘 뒤(`SND.bgm[].norm`) 같은 음량(0.5)으로 틀어요.
+- 효과음 음량·동시 재생 수는 사운드 패키지의 audio_manifest.json 값. 같은 소리가 0.12초 안에 겹치면 작게, 전체 동시 재생은 최대 6개.
+- 오디오는 첫 터치·클릭·키 입력에서 켜져요(모바일 자동 재생 정책). 탭을 옮기면 멈췄다가 돌아오면 이어서 재생.
+- 소리 설정: 오른쪽 위 ♪ 버튼 → 배경음악·효과음 음량 0~10단계(기본 7, 0이면 완전히 꺼짐)와 끄기/켜기. 플레이 중에 열면 게임이 잠시 멈춰요. 저장 키 `kkisy-bgm`, `kkisy-sfx`.
+- 새로 만든 두 곡은 끝에 짧은 페이드가 있어서 30초마다 아주 잠깐 소리가 작아질 수 있어요(원본 무편집).
+
 ## 온라인 랭킹
 - 서버: `https://kkranking.jinthesurge.workers.dev` (`index.html`의 `RANK_API` 상수)
 - `POST /score` `{name, score}` — 게임오버 화면이 뜬 뒤, 이번 점수가 이 기기에서 등록한 최고 점수보다 높을 때만 1회 전송
@@ -70,6 +90,7 @@ assets/
   characters/              haenyangi_*.png (120×120, 9프레임), sseoyeon_sleep/wake.png (침대 포함)
   effects/                 fx_perfect_0~7, fx_block_impact_0~5, fx_land_dust_0~5
   ui/                      logo, panel, button_normal/pressed, digit_0~9
+  audio/bgm/, audio/sfx/   배경음악 3곡, 효과음 10종 (사운드 패키지 v1 파일명 그대로)
 worker/                    랭킹 서버 (Cloudflare Worker + KV)
 tools/
   build-single-file.mjs    단일 HTML 만들기

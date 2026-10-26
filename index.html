@@ -34,7 +34,7 @@ body{background:var(--outside);color:var(--ink);font-family:var(--body);overflow
   max-width:100%;border-radius:14px;overflow:hidden;background:var(--sky);container-type:size;
   box-shadow:0 0 0 1px rgba(255,255,255,.08),0 20px 60px rgba(0,0,0,.5)}
 canvas{display:block;width:100%;height:100%;cursor:pointer}
-.hud{position:absolute;top:0;left:0;right:0;display:flex;justify-content:space-between;align-items:flex-start;
+.hud{position:absolute;top:0;left:0;right:0;z-index:5;display:flex;justify-content:space-between;align-items:flex-start;
   padding:4cqw 4cqw 0;pointer-events:none}
 /* score drawn with the digit sprites in assets/ui */
 .digits{display:flex;align-items:flex-end;gap:0}
@@ -85,7 +85,7 @@ button:focus-visible{outline:3px solid #fff;outline-offset:3px;border-radius:99p
 .name-input:focus{border-color:#5a63d8}
 .err{min-height:4.4cqw;color:#c0396b!important;font-size:3.4cqw!important}
 .pre{white-space:pre-line}
-#rankOv,#nameOv{background:rgba(16,18,60,.55)}
+#rankOv,#nameOv,#sndOv{background:rgba(16,18,60,.55)}
 /* game over: everything sits inside the panel's inner sky (left/right 12%, top 18%, bottom 21%) */
 .card.over{display:block;padding:0}
 .card.over .inner{position:absolute;left:12%;right:12%;top:17%;bottom:19%;display:flex;flex-direction:column;
@@ -98,6 +98,17 @@ button:focus-visible{outline:3px solid #fff;outline-offset:3px;border-radius:99p
 .card.over .status:empty{display:none}
 .card.over #retryBtn{width:46cqw;font-size:5.4cqw;padding-left:10cqw;margin-top:.6cqw;flex:none}
 .card.over .link{font-size:3.6cqw;padding:.7cqw 4cqw;flex:none}
+/* ---- sound ---- */
+.snd-btn{pointer-events:auto;width:9.5cqw;aspect-ratio:1;border-radius:50%;padding:0;margin-top:1.4cqw;font-size:5cqw;line-height:1;
+  background:rgba(255,255,255,.78);color:var(--card-ink);-webkit-text-stroke:0;border:.5cqw solid rgba(80,90,200,.35);
+  box-shadow:0 .6cqw 1.4cqw rgba(30,30,100,.35)}
+.snd-btn:active{background:#fff}
+.snd-btn.off{opacity:.6}
+.card.snd .inner{gap:2.4cqw}
+.snd-row{display:grid;grid-template-columns:16.5cqw minmax(0,1fr) 13cqw;align-items:center;gap:2cqw;width:100%}
+.snd-row label{white-space:nowrap;font-weight:800;font-size:3.8cqw;color:var(--card-ink);text-align:left;text-shadow:0 0 1cqw rgba(255,255,255,.9)}
+.snd-row input{width:100%;accent-color:#5a63d8;margin:0}
+.snd-row .link{padding:.7cqw 0;width:100%;white-space:nowrap;font-size:3.6cqw}
 </style>
 </head>
 <body>
@@ -106,7 +117,7 @@ button:focus-visible{outline:3px solid #fff;outline-offset:3px;border-radius:99p
   <canvas id="cv" aria-label="꿈꾸고이써연 게임 화면"></canvas>
   <div class="hud">
     <div class="digits" id="score" role="img" aria-label="점수 0"></div>
-    <div class="side"><span class="label">최고 기록</span><div class="digits" id="best" role="img" aria-label="최고 기록 0"></div></div>
+    <div class="side"><span class="label">최고 기록</span><div class="digits" id="best" role="img" aria-label="최고 기록 0"></div><button class="snd-btn" id="sndBtn" type="button" aria-label="소리 설정">♪</button></div>
   </div>
   <div class="combo" id="combo"></div>
   <div class="overlay" id="startOv">
@@ -125,6 +136,14 @@ button:focus-visible{outline:3px solid #fff;outline-offset:3px;border-radius:99p
       <p class="status" id="rankStatus" role="status"></p>
       <button id="retryBtn">다시 하기</button>
       <button class="link" id="overRank" type="button">랭킹 보기</button>
+    </div></div>
+  </div>
+  <div class="overlay" id="sndOv" hidden>
+    <div class="card over snd" role="dialog" aria-labelledby="sndTitle"><div class="inner">
+      <h1 id="sndTitle">소리 설정</h1>
+      <div class="snd-row"><label for="bgmVol">배경음악</label><input id="bgmVol" type="range" min="0" max="10" step="1"><button class="link" id="bgmMute" type="button">끄기</button></div>
+      <div class="snd-row"><label for="sfxVol">효과음</label><input id="sfxVol" type="range" min="0" max="10" step="1"><button class="link" id="sfxMute" type="button">끄기</button></div>
+      <button class="link" id="sndClose" type="button">닫기</button>
     </div></div>
   </div>
   <div class="overlay" id="rankOv" hidden>
@@ -427,6 +446,136 @@ button:focus-visible{outline:3px solid #fff;outline-offset:3px;border-radius:99p
   function updateCamera() { camTarget = Math.max(0, FOCUS_Y - blockTop(stack.length)); }
   const addFx = (kind, x, y) => fx.push({ kind, x, y, t: 0 });
 
+
+  // ---------- sound (sound pack v1: docs/audio_manifest.json) ----------
+  // BGM follows the background stage: 0–29F lullaby, 30–69F cloud path, 70F+ dream castle (loops), 2s cross-fade.
+  // The original lullaby is ~12 dB louder than the two new tracks (-12.7 vs -24.7/-23.6 LUFS), so each track
+  // is first normalised to the same loudness (norm) and then mixed at the same level.
+  const SND = {
+    bgm: [ { file: 'audio/bgm/bgm_01_original_lullaby.mp3', norm: 0.266 },
+           { file: 'audio/bgm/bgm_02_cloud_path.wav',       norm: 1.059 },
+           { file: 'audio/bgm/bgm_03_dream_castle.wav',     norm: 0.933 } ],
+    bgmLevel: 0.5, crossfade: 2.0, duck: 0.4,
+    sfx: { // gain and polyphony from the manifest
+      jump:  { file: 'audio/sfx/sfx_jump.wav',  gain: 0.38, poly: 2 },
+      land:  { file: 'audio/sfx/sfx_land.wav',  gain: 0.35, poly: 1 },
+      stack: { file: 'audio/sfx/sfx_stack.wav', gain: 0.5,  poly: 1 },
+      perfect: { file: 'audio/sfx/sfx_perfect.wav', gain: 0.75, poly: 1 },
+      cut:   { file: 'audio/sfx/sfx_cut.wav',   gain: 0.5,  poly: 1 },
+      gameover: { file: 'audio/sfx/sfx_gameover.wav', gain: 0.5, poly: 1 },
+      click: { file: 'audio/sfx/sfx_click.wav', gain: 0.5,  poly: 1 },
+      combo: { file: 'audio/sfx/sfx_combo.wav', gain: 0.5,  poly: 1 },
+      newrecord: { file: 'audio/sfx/sfx_newrecord.wav', gain: 0.72, poly: 1 },
+      transition: { file: 'audio/sfx/sfx_dream_transition.wav', gain: 0.5, poly: 1 },
+    },
+  };
+  const AC = window.AudioContext || window.webkitAudioContext;
+  const au = { ctx: null, buf: {}, bgmBus: null, duckBus: null, sfxBus: null, track: -1, want: 0, src: null, gain: null,
+    live: {}, last: {}, total: 0,
+    bgmVol: (v => v === null ? 7 : +v)(store.get('kkisy-bgm')), sfxVol: (v => v === null ? 7 : +v)(store.get('kkisy-sfx')),
+    bgmPrev: +store.get('kkisy-bgm-prev') || 7, sfxPrev: +store.get('kkisy-sfx-prev') || 7 };
+  const volCurve = v => v <= 0 ? 0 : Math.pow(v / 10, 2);           // 0 = fully off
+  function audioApply() {
+    if (!au.ctx) return;
+    const t = au.ctx.currentTime;
+    au.bgmBus.gain.setTargetAtTime(volCurve(au.bgmVol), t, 0.05);
+    au.sfxBus.gain.setTargetAtTime(volCurve(au.sfxVol), t, 0.02);
+  }
+  function decode(ab) { return new Promise((res, rej) => au.ctx.decodeAudioData(ab, res, rej)); }
+  function loadBuf(file) {
+    return au.buf[file] || (au.buf[file] = fetch(url(file)).then(r => r.arrayBuffer()).then(decode)
+      .then(b => (au.buf[file] = b)).catch(e => { console.warn('[꿈꾸고이써연] 소리 불러오기 실패:', file, e); au.buf[file] = null; }));
+  }
+  const ready = file => au.buf[file] instanceof AudioBuffer ? au.buf[file] : null;
+  // first trusted input unlocks audio on mobile (iOS Safari / Android Chrome)
+  function audioUnlock() {
+    if (!AC) return;
+    if (!au.ctx) {
+      au.ctx = new AC();
+      au.bgmBus = au.ctx.createGain(); au.duckBus = au.ctx.createGain(); au.sfxBus = au.ctx.createGain();
+      au.duckBus.connect(au.bgmBus); au.bgmBus.connect(au.ctx.destination); au.sfxBus.connect(au.ctx.destination);
+      audioApply();
+      SND.bgm.forEach((b, i) => loadBuf(b.file).then(() => { if (i === au.want && au.track !== au.want) bgm(au.want, true); }));
+      Object.values(SND.sfx).forEach(s => loadBuf(s.file));
+    }
+    if (au.ctx.state !== 'running') au.ctx.resume().catch(() => {});
+  }
+  ['pointerdown', 'touchend', 'keydown'].forEach(ev => window.addEventListener(ev, audioUnlock, { capture: true, passive: true }));
+  document.addEventListener('visibilitychange', () => {
+    if (!au.ctx) return;
+    if (document.hidden) au.ctx.suspend().catch(() => {}); else au.ctx.resume().catch(() => {});
+  });
+
+  // switch BGM track with a cross-fade (instant=true on the very first start)
+  function bgm(i, instant) {
+    au.want = i;
+    if (!au.ctx || i === au.track) return;
+    const b = ready(SND.bgm[i].file); if (!b) return;
+    const t = au.ctx.currentTime, fade = instant ? 0.3 : SND.crossfade;
+    if (au.src) {
+      const s = au.src, g = au.gain;
+      g.gain.cancelScheduledValues(t); g.gain.setValueAtTime(g.gain.value, t); g.gain.linearRampToValueAtTime(0, t + fade);
+      s.stop(t + fade + 0.05);
+    }
+    const src = au.ctx.createBufferSource(), g = au.ctx.createGain();
+    src.buffer = b; src.loop = true;
+    const target = SND.bgm[i].norm * SND.bgmLevel;
+    g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(target, t + fade);
+    src.connect(g); g.connect(au.duckBus); src.start(t);
+    au.src = src; au.gain = g; au.track = i;
+  }
+  function bgmDuck(on) {
+    if (!au.ctx) return;
+    const t = au.ctx.currentTime;
+    au.duckBus.gain.cancelScheduledValues(t); au.duckBus.gain.setValueAtTime(au.duckBus.gain.value, t);
+    au.duckBus.gain.linearRampToValueAtTime(on ? SND.duck : 1, t + (on ? 0.35 : 0.8));
+  }
+  // one-shot effect with polyphony limit; repeats within 120ms play quieter, max 6 at once
+  function sfx(name, delay = 0) {
+    const d = SND.sfx[name];
+    if (!au.ctx || !d || au.sfxVol <= 0) return;
+    const b = ready(d.file); if (!b) return;
+    const live = au.live[name] || (au.live[name] = []);
+    while (live.length >= d.poly) { const o = live.shift(); try { o.stop(); } catch (e) {} }
+    if (au.total >= 6) return;
+    const t = au.ctx.currentTime + delay;
+    const g = au.ctx.createGain();
+    g.gain.value = d.gain * ((au.last[name] && t - au.last[name] < 0.12) ? 0.6 : 1);
+    au.last[name] = t;
+    const s = au.ctx.createBufferSource(); s.buffer = b; s.connect(g); g.connect(au.sfxBus);
+    live.push(s); au.total++;
+    s.onended = () => { const k = live.indexOf(s); if (k >= 0) live.splice(k, 1); au.total--; };
+    s.start(t);
+  }
+  // any button press clicks (start, retry, ranking, nickname, settings)
+  document.addEventListener('click', e => { if (e.target.closest && e.target.closest('button')) sfx('click'); });
+
+  // settings window (BGM / SFX volume 0–10, 0 = off); pauses the game while open
+  let paused = false;
+  function sndRender() {
+    $('bgmVol').value = au.bgmVol; $('sfxVol').value = au.sfxVol;
+    $('bgmMute').textContent = au.bgmVol > 0 ? '끄기' : '켜기';
+    $('sfxMute').textContent = au.sfxVol > 0 ? '끄기' : '켜기';
+    $('sndBtn').classList.toggle('off', au.bgmVol <= 0 && au.sfxVol <= 0);
+    $('sndBtn').textContent = au.bgmVol <= 0 && au.sfxVol <= 0 ? '✕' : '♪';
+  }
+  function sndSave() {
+    store.set('kkisy-bgm', String(au.bgmVol)); store.set('kkisy-sfx', String(au.sfxVol));
+    store.set('kkisy-bgm-prev', String(au.bgmPrev)); store.set('kkisy-sfx-prev', String(au.sfxPrev));
+    audioApply(); sndRender();
+  }
+  $('bgmVol').addEventListener('input', e => { au.bgmVol = +e.target.value; if (au.bgmVol > 0) au.bgmPrev = au.bgmVol; sndSave(); });
+  $('sfxVol').addEventListener('input', e => { au.sfxVol = +e.target.value; if (au.sfxVol > 0) au.sfxPrev = au.sfxVol; sndSave(); });
+  $('sfxVol').addEventListener('change', () => sfx('stack'));             // preview the new effect volume
+  $('bgmMute').addEventListener('click', () => { au.bgmVol = au.bgmVol > 0 ? 0 : (au.bgmPrev || 7); sndSave(); });
+  $('sfxMute').addEventListener('click', () => { au.sfxVol = au.sfxVol > 0 ? 0 : (au.sfxPrev || 7); sndSave(); });
+  function openSound() { $('sndOv').hidden = false; if (state === 'play') paused = true; sndRender(); }
+  function closeSound() { $('sndOv').hidden = true; paused = false; }
+  $('sndBtn').addEventListener('click', openSound);
+  $('sndClose').addEventListener('click', closeSound);
+  $('sndOv').addEventListener('pointerdown', e => { if (e.target === $('sndOv')) closeSound(); });
+  sndRender();
+
   function drop() {
     if (state !== 'play') return;
     const top = stack[stack.length - 1];
@@ -442,6 +591,7 @@ button:focus-visible{outline:3px solid #fff;outline-offset:3px;border-radius:99p
       x = top.x; combo++;
       flash = 1;
       if (combo > 1) showCombo(`COMBO ×${combo}`);       // PERFECT itself is the sprite animation
+      sfx('perfect'); if (combo > 1) sfx('combo', 0.16);   // perfect only (no stack sound), combo chime just after
       if (combo >= 3) { const g = Math.min(10, START_W - w); x -= g / 2; w += g; }
     } else {
       combo = 0;
@@ -452,6 +602,7 @@ button:focus-visible{outline:3px solid #fff;outline-offset:3px;border-radius:99p
       }
       if (x < L) debris.push({ x, w: L - x, i, vy: 0, vx: -1.2, rot: 0, vr: -0.04 });
       if (x + w > R) debris.push({ x: R, w: x + w - R, i, vy: 0, vx: 1.2, rot: 0, vr: 0.04 });
+      sfx('stack'); if (x < L || x + w > R) sfx('cut');
       x = L; w = R - L;
     }
     stack.push({ x, w });
@@ -477,6 +628,8 @@ button:focus-visible{outline:3px solid #fff;outline-offset:3px;border-radius:99p
     state = 'over'; cur = null; overT = 0;
     rk.status = ''; rk.rank = 0; renderStatus();
     const isBest = score > best;
+    bgmDuck(true); sfx('gameover');
+    if (isBest && score > 0) sfx('newrecord', 1.3);
     if (isBest) { best = score; try { localStorage.setItem('stackBest', best); } catch (e) {} }
     setDigits($('best'), best, '최고 기록');
     setDigits($('finalScore'), score, '최종 점수');
@@ -488,7 +641,7 @@ button:focus-visible{outline:3px solid #fff;outline-offset:3px;border-radius:99p
   function update() {
     // background stage cross-fade (counted in game ticks so it lasts 0.8s everywhere)
     const st = stageOf(score);
-    if (st !== bgTo) { bgFrom = bgTo; bgTo = st; bgT = 0; }
+    if (st !== bgTo) { if (st > bgTo) sfx('transition'); bgFrom = bgTo; bgTo = st; bgT = 0; bgm(st); }
     if (bgT < BG_FADE) bgT++;
     if (cur) {
       cur.x += cur.dir * cur.speed;
@@ -497,11 +650,11 @@ button:focus-visible{outline:3px solid #fff;outline-offset:3px;border-radius:99p
     }
     cam += (camTarget - cam) * 0.1;
     if (cap.resting) {
-      if (state !== 'over' && --cap.wait <= 0) { cap.resting = false; cap.vy = -9.8; }
+      if (state !== 'over' && --cap.wait <= 0) { cap.resting = false; cap.vy = -9.8; sfx('jump'); }
     } else {
       cap.vy += Math.abs(cap.vy) < 2.9 ? 0.106 : 0.265; cap.dy += cap.vy;
       if (cap.vy > 0 && cap.dy >= 0) {
-        cap.dy = 0; cap.vy = 0; cap.resting = true; cap.squash = 1;
+        cap.dy = 0; cap.vy = 0; cap.resting = true; cap.squash = 1; sfx('land');
         cap.wait = 22;
         const feet = blockTop(stack.length) + BH, half = Math.min(Math.max(cap.w, 56), 196) / 2 - 10;
         addFx('dust', cap.x + cap.w / 2 - half, feet - 10);
@@ -668,7 +821,7 @@ button:focus-visible{outline:3px solid #fff;outline-offset:3px;border-radius:99p
     if (lastT === null) lastT = now;
     acc += Math.min(now - lastT, TICK * MAX_CATCHUP);
     lastT = now;
-    while (acc >= TICK) { update(); acc -= TICK; }
+    while (acc >= TICK) { if (!paused) update(); acc -= TICK; }
     render();
     requestAnimationFrame(loop);
   }
@@ -677,6 +830,7 @@ button:focus-visible{outline:3px solid #fff;outline-offset:3px;border-radius:99p
   function start() {
     $('startOv').hidden = true; $('overOv').hidden = true;
     reset(); state = 'play';
+    bgmDuck(false); bgm(0);
   }
 
   cv.addEventListener('pointerdown', e => { e.preventDefault(); drop(); });
@@ -684,11 +838,12 @@ button:focus-visible{outline:3px solid #fff;outline-offset:3px;border-radius:99p
     if (e.target && e.target.tagName === 'INPUT') return;           // typing a nickname
     if (!$('nameOv').hidden) return;
     if (!$('rankOv').hidden) { if (['Escape', 'Space', 'Enter'].includes(e.code)) { e.preventDefault(); closeRanking(); } return; }
+    if (!$('sndOv').hidden) { if (['Escape', 'Space', 'Enter'].includes(e.code) && e.target.tagName !== 'BUTTON') { e.preventDefault(); closeSound(); } return; }
     if (e.code !== 'Space' && e.code !== 'Enter') return;
     e.preventDefault();
     if (state === 'play') drop();
-    else if (state === 'over' && !$('overOv').hidden) start();
-    else if (state === 'idle') start();
+    else if (state === 'over' && !$('overOv').hidden) { sfx('click'); start(); }
+    else if (state === 'idle') { sfx('click'); start(); }
   });
   $('startBtn').addEventListener('click', start);
   $('retryBtn').addEventListener('click', start);
